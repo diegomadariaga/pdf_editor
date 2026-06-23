@@ -109,7 +109,7 @@ export const TextBlock: React.FC<TextBlockProps> = ({
         left: `${block.x}%`,
         top: `${block.y}%`,
         fontFamily: getCssFontFamily(block.font),
-        fontSize: `${block.fontSize * renderScale}px`,
+        fontSize: `${(block.fontSize || 12) * renderScale}px`,
         color: block.color,
       }}
       onPointerDown={handlePointerDown}

@@ -788,24 +788,27 @@ export const App: React.FC = () => {
       }
 
       const { width: pdfWidth, height: pdfHeight } = pdfPage.getSize();
+      const intrinsicRotation = pdfPage.getRotation().angle || 0;
+      const userRotation = pageObj.rotation || 0;
+      const totalRotation = (intrinsicRotation + userRotation) % 360;
 
       // Apply page rotation
       if (pageObj.rotation) {
-        const rotationAngle = (pdfPage.getRotation().angle + pageObj.rotation) % 360;
-        pdfPage.setRotation(PDFLib.degrees(rotationAngle));
+        pdfPage.setRotation(PDFLib.degrees(totalRotation));
       }
 
       // 1. Cover up previously burned blocks anchored to this pageId
       const coverups = docToCompile.loadedTextBlocks.filter((ob) => ob.pageId === pageObj.pageId);
       for (const ob of coverups) {
-        let { x: obX, y: obY } = transformCoords(ob.x, ob.y, pdfWidth, pdfHeight, pageObj.rotation || 0);
+        const obFontSize = ob.fontSize || 12;
+        let { x: obX, y: obY } = transformCoords(ob.x, ob.y, pdfWidth, pdfHeight, totalRotation);
 
         // Adjust baseline shift based on rotation
-        const theta = (pageObj.rotation || 0) % 360;
-        if (theta === 0) obY -= ob.fontSize * 0.85;
-        else if (theta === 90) obX += ob.fontSize * 0.85;
-        else if (theta === 180) obY += ob.fontSize * 0.85;
-        else if (theta === 270) obX -= ob.fontSize * 0.85;
+        const theta = totalRotation;
+        if (theta === 0) obY -= obFontSize * 0.85;
+        else if (theta === 90) obX += obFontSize * 0.85;
+        else if (theta === 180) obY += obFontSize * 0.85;
+        else if (theta === 270) obX -= obFontSize * 0.85;
 
         let obFont;
         if (ob.font === 'TimesNewRoman') {
@@ -816,8 +819,9 @@ export const App: React.FC = () => {
           obFont = await newPdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
         }
 
-        const textWidth = obFont.widthOfTextAtSize(ob.text, ob.fontSize);
-        const textHeight = ob.fontSize * 1.25;
+        const textWidth = obFont.widthOfTextAtSize(ob.text, obFontSize);
+        const textHeight = obFontSize * 1.25;
+        const obTextRotation = theta === 0 ? 0 : 360 - theta;
 
         pdfPage.drawRectangle({
           x: obX - 2,
@@ -825,6 +829,7 @@ export const App: React.FC = () => {
           width: textWidth + 4,
           height: textHeight,
           color: PDFLib.rgb(1, 1, 1),
+          rotate: PDFLib.degrees(obTextRotation),
         });
       }
 
@@ -835,8 +840,10 @@ export const App: React.FC = () => {
         const textWidth = font.widthOfTextAtSize(w.text, w.fontSize);
 
         // Center visual rotation coordinate mapping
-        const x = (pdfWidth - textWidth * Math.cos(Math.PI / 4)) / 2;
-        const y = (pdfHeight - textWidth * Math.sin(Math.PI / 4)) / 2;
+        const watermarkRotation = (45 - totalRotation + 360) % 360;
+        const phi = (watermarkRotation * Math.PI) / 180;
+        const x = (pdfWidth - textWidth * Math.cos(phi)) / 2;
+        const y = (pdfHeight - textWidth * Math.sin(phi)) / 2;
 
         const hex = w.color.replace(/^#/, '');
         const r = parseInt(hex.substring(0, 2), 16) / 255;
@@ -850,7 +857,7 @@ export const App: React.FC = () => {
           font,
           color: PDFLib.rgb(r, g, b),
           opacity: w.opacity,
-          rotate: PDFLib.degrees(45),
+          rotate: PDFLib.degrees(watermarkRotation),
         });
       }
 
@@ -859,14 +866,15 @@ export const App: React.FC = () => {
       for (const block of activeBlocks) {
         if (!block.text.trim()) continue;
 
-        let { x: pdfX, y: pdfY } = transformCoords(block.x, block.y, pdfWidth, pdfHeight, pageObj.rotation || 0);
+        const currentFontSize = block.fontSize || 12;
+        let { x: pdfX, y: pdfY } = transformCoords(block.x, block.y, pdfWidth, pdfHeight, totalRotation);
 
         // Adjust baseline shift based on rotation
-        const theta = (pageObj.rotation || 0) % 360;
-        if (theta === 0) pdfY -= block.fontSize * 0.85;
-        else if (theta === 90) pdfX += block.fontSize * 0.85;
-        else if (theta === 180) pdfY += block.fontSize * 0.85;
-        else if (theta === 270) pdfX -= block.fontSize * 0.85;
+        const theta = totalRotation;
+        if (theta === 0) pdfY -= currentFontSize * 0.85;
+        else if (theta === 90) pdfX += currentFontSize * 0.85;
+        else if (theta === 180) pdfY += currentFontSize * 0.85;
+        else if (theta === 270) pdfX -= currentFontSize * 0.85;
 
         const textRotation = theta === 0 ? 0 : 360 - theta;
 
@@ -887,7 +895,7 @@ export const App: React.FC = () => {
         pdfPage.drawText(block.text, {
           x: pdfX,
           y: pdfY,
-          size: block.fontSize,
+          size: currentFontSize,
           font: pdfFont,
           color: PDFLib.rgb(r, g, b),
           rotate: PDFLib.degrees(textRotation),
@@ -908,8 +916,8 @@ export const App: React.FC = () => {
           const pt1 = stroke.points[i];
           const pt2 = stroke.points[i + 1];
 
-          const { x: x1, y: y1 } = transformCoords(pt1.x, pt1.y, pdfWidth, pdfHeight, pageObj.rotation || 0);
-          const { x: x2, y: y2 } = transformCoords(pt2.x, pt2.y, pdfWidth, pdfHeight, pageObj.rotation || 0);
+          const { x: x1, y: y1 } = transformCoords(pt1.x, pt1.y, pdfWidth, pdfHeight, totalRotation);
+          const { x: x2, y: y2 } = transformCoords(pt2.x, pt2.y, pdfWidth, pdfHeight, totalRotation);
 
           pdfPage.drawLine({
             start: { x: x1, y: y1 },
@@ -931,7 +939,7 @@ export const App: React.FC = () => {
         y: block.y,
         pageIndex: finalPageIndex,
         font: block.font,
-        fontSize: block.fontSize,
+        fontSize: block.fontSize || 12,
         color: block.color,
       };
     });

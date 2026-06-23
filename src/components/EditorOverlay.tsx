@@ -118,8 +118,15 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
 
   const handleSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!activeTextBlockId) return;
-    const size = parseInt(e.target.value) || 12;
-    onUpdateBlockStyle(activeTextBlockId, { fontSize: size });
+    const val = e.target.value;
+    if (val === '') {
+      onUpdateBlockStyle(activeTextBlockId, { fontSize: 0 });
+    } else {
+      const size = parseInt(val);
+      if (!isNaN(size)) {
+        onUpdateBlockStyle(activeTextBlockId, { fontSize: size });
+      }
+    }
   };
 
   const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -363,7 +370,7 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
                       id="text-size"
                       min="8"
                       max="72"
-                      value={activeBlock.fontSize}
+                      value={activeBlock.fontSize || ''}
                       onChange={handleSizeChange}
                     />
                     <span className="unit">px</span>
