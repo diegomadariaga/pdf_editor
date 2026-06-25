@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Type, LayoutGrid, TypeOutline, Palette, Check, Download, 
   Undo2, Redo2, Pencil, Highlighter, Eraser, Stamp, MousePointer,
@@ -93,6 +93,31 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
+
+  const editorContentRef = useRef<HTMLDivElement>(null);
+
+  // Wheel and pinch-to-zoom listener with prevention of browser zoom
+  useEffect(() => {
+    const element = editorContentRef.current;
+    if (!element) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const direction = e.deltaY < 0 ? 1 : -1;
+        const step = Math.min(0.08, Math.max(0.01, Math.abs(e.deltaY) * 0.003)) * direction;
+        setZoomScale((prev) => {
+          const next = Math.max(0.5, Math.min(2.5, prev + step));
+          return Math.round(next * 100) / 100;
+        });
+      }
+    };
+
+    element.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      element.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
 
   // Watermark Values derived directly from document
   const watermarkText = doc.watermark?.text || '';
@@ -560,7 +585,7 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
             onSelectPage={handleSelectPage}
           />
         )}
-        <div className="editor-content" onClick={handleEditorOverlayClick}>
+        <div ref={editorContentRef} className="editor-content" onClick={handleEditorOverlayClick}>
           {editorMode === 'text' ? (
             <TextEditView
               pages={doc.pages}
