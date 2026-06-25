@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Edit3, Trash2, GripVertical, Download, CornerUpLeft, CornerUpRight } from 'lucide-react';
+import { Edit3, Trash2, GripVertical, Download } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { Document } from '../types';
 
@@ -9,10 +9,9 @@ interface FileCardProps {
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onDownload: (doc: Document) => void;
-  onRotateDoc: (id: string, angleDelta: number) => void;
 }
 
-export const FileCard: React.FC<FileCardProps> = ({ doc, onRename, onEdit, onDelete, onDownload, onRotateDoc }) => {
+export const FileCard: React.FC<FileCardProps> = ({ doc, onRename, onEdit, onDelete, onDownload }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -95,22 +94,7 @@ export const FileCard: React.FC<FileCardProps> = ({ doc, onRename, onEdit, onDel
           <button className="btn btn-secondary btn-small edit-doc-btn" onClick={() => onEdit(doc.id)}>
             <Edit3 size={14} /> Editar
           </button>
-          <button 
-            className="btn btn-secondary btn-small rotate-doc-left-btn" 
-            title="Rotar todo el PDF 90° izquierda" 
-            onClick={() => onRotateDoc(doc.id, -90)}
-            style={{ padding: '0.4rem', flex: 'none', width: '32px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-          >
-            <CornerUpLeft size={14} />
-          </button>
-          <button 
-            className="btn btn-secondary btn-small rotate-doc-right-btn" 
-            title="Rotar todo el PDF 90° derecha" 
-            onClick={() => onRotateDoc(doc.id, 90)}
-            style={{ padding: '0.4rem', flex: 'none', width: '32px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-          >
-            <CornerUpRight size={14} />
-          </button>
+
           <button className="btn btn-primary btn-small download-doc-btn" title="Descargar PDF" onClick={() => onDownload(doc)}>
             <Download size={14} /> Descargar
           </button>

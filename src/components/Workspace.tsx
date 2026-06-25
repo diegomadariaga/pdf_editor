@@ -16,7 +16,6 @@ interface WorkspaceProps {
   onReorder: (sortedIds: string[]) => void;
   onMerge: (filename: string) => void;
   onDownload: (doc: Document) => void;
-  onRotateDoc: (id: string, angleDelta: number) => void;
 }
 
 export const Workspace: React.FC<WorkspaceProps> = ({
@@ -29,7 +28,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   onReorder,
   onMerge,
   onDownload,
-  onRotateDoc,
 }) => {
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -103,7 +101,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onDownload={onDownload}
-                onRotateDoc={onRotateDoc}
               />
             ))}
           </div>

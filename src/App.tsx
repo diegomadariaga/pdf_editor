@@ -651,49 +651,6 @@ export const App: React.FC = () => {
     updateEditingDocState(updatedDoc, true, false);
   };
 
-  const handleRotateDocument = async (docId: string, angleDelta: number) => {
-    const doc = documents.find((d) => d.id === docId);
-    if (!doc) return;
-
-    showLoader("Rotando Documento", "Aplicando rotación a todas las páginas...");
-
-    try {
-      const rotatedPages = doc.pages.map((p) => {
-        const currentRotation = p.rotation || 0;
-        const newRotation = (currentRotation + angleDelta + 360) % 360;
-        return {
-          ...p,
-          rotation: newRotation,
-        };
-      });
-
-      const docToCompile = {
-        ...doc,
-        pages: rotatedPages,
-      };
-
-      const { newBytes, savedPages, savedBlocks } = await compileEditingDoc(docToCompile);
-
-      setDocuments((prev) =>
-        prev.map((d) => {
-          if (d.id !== docId) return d;
-          return {
-            ...d,
-            rawBytes: newBytes,
-            pages: savedPages,
-            textBlocks: savedBlocks,
-            loadedTextBlocks: JSON.parse(JSON.stringify(savedBlocks)),
-          };
-        })
-      );
-      showToast("Documento rotado con éxito.", "success");
-    } catch (err) {
-      console.error("Error rotating document:", err);
-      showToast("Error al rotar el documento", "danger");
-    } finally {
-      hideLoader();
-    }
-  };
 
   const handleInsertBlankPage = (afterIndex: number) => {
     if (!editingDoc) return;
@@ -1062,7 +1019,6 @@ export const App: React.FC = () => {
         onReorder={handleReorderDocuments}
         onMerge={handleMergeDocuments}
         onDownload={(doc) => downloadBytes(doc.rawBytes, `${doc.name}.pdf`)}
-        onRotateDoc={handleRotateDocument}
       />
 
       {/* Advanced Editor Overlay */}
