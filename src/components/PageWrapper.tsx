@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { Page, TextBlock as TextBlockType, DrawingStroke, Watermark } from '../types';
@@ -56,9 +56,14 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
   const [intrinsicSize, setIntrinsicSize] = useState<{ width: number; height: number } | null>(null);
   const [debouncedScale, setDebouncedScale] = useState(renderScale);
+  const debouncedScaleRef = useRef(debouncedScale);
+
+  // Sync debouncedScale to ref to keep dependencies clean in the render effect
+  useEffect(() => {
+    debouncedScaleRef.current = debouncedScale;
+  }, [debouncedScale]);
 
   // Debounce the scale update to prevent heavy canvas re-rendering lag
   useEffect(() => {
@@ -111,64 +116,28 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
     };
   }, [page, pdfjsDoc]);
 
-  // Update canvas resolution (dimensions) using debouncedScale
-  useEffect(() => {
-    let active = true;
-    const loadPageDimensions = async () => {
-      try {
-        if (!intrinsicSize) return;
-
-        if (page.isBlank) {
-          if (active) {
-            setDimensions({
-              width: intrinsicSize.width * debouncedScale,
-              height: intrinsicSize.height * debouncedScale,
-            });
-          }
-          return;
+  // Deriving canvas resolution dimensions synchronously during render using useMemo
+  // Triggers React DOM canvas width/height updates before useEffect fires
+  const dimensions = useMemo(() => {
+    return intrinsicSize
+      ? {
+          width: intrinsicSize.width * debouncedScale,
+          height: intrinsicSize.height * debouncedScale,
         }
+      : null;
+  }, [intrinsicSize, debouncedScale]);
 
-        let pageDoc = pdfjsDoc;
-        let idxOffset = page.originalIndex + 1;
-
-        if (page.externalBytes) {
-          const extPdf = await pdfjsLib.getDocument({
-            data: page.externalBytes,
-            cMapUrl: `${window.location.origin}/cmaps/`,
-            cMapPacked: true,
-            standardFontDataUrl: `${window.location.origin}/standard_fonts/`,
-            wasmUrl: `${window.location.origin}/wasm/`,
-          }).promise;
-          pageDoc = extPdf;
-          idxOffset = (page.externalOriginalIndex ?? 0) + 1;
-        }
-
-        const pdfjsPage = await pageDoc.getPage(idxOffset);
-        const rotationAngle = (pdfjsPage.rotate + (page.rotation || 0)) % 360;
-        const viewport = pdfjsPage.getViewport({ scale: debouncedScale, rotation: rotationAngle });
-        if (active) {
-          setDimensions({ width: viewport.width, height: viewport.height });
-        }
-      } catch (err) {
-        console.error("Error loading page dimensions:", err);
-      }
-    };
-    loadPageDimensions();
-    return () => {
-      active = false;
-    };
-  }, [intrinsicSize, page, pdfjsDoc, debouncedScale]);
-
-  // Render PDF page content using debouncedScale and dimensions
+  // Render PDF page content. It depends strictly on dimensions state, ensuring rendering
+  // only happens AFTER React has updated the canvas width/height properties in the DOM.
   useEffect(() => {
     if (!dimensions || !canvasRef.current) return;
     let active = true;
     let renderTask: pdfjsLib.RenderTask | null = null;
 
-    const renderPageContent = async () => {
+    const renderPage = async () => {
       try {
         const canvas = canvasRef.current;
-        if (!canvas) return;
+        if (!canvas || !active) return;
         const context = canvas.getContext('2d');
         if (!context || !active) return;
 
@@ -197,7 +166,7 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
         if (!active || !canvasRef.current) return;
 
         const rotationAngle = (pdfjsPage.rotate + (page.rotation || 0)) % 360;
-        const viewport = pdfjsPage.getViewport({ scale: debouncedScale, rotation: rotationAngle });
+        const viewport = pdfjsPage.getViewport({ scale: debouncedScaleRef.current, rotation: rotationAngle });
 
         renderTask = pdfjsPage.render({
           canvasContext: context,
@@ -214,7 +183,7 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
       }
     };
 
-    renderPageContent();
+    renderPage();
 
     return () => {
       active = false;
@@ -222,7 +191,7 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
         renderTask.cancel();
       }
     };
-  }, [dimensions, page, pdfjsDoc, debouncedScale]);
+  }, [dimensions, page, pdfjsDoc]);
 
   // Drawing Local State
   const [isDrawing, setIsDrawing] = useState(false);
