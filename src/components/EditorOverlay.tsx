@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { 
   X, Type, LayoutGrid, TypeOutline, Palette, Check, Download, 
   Undo2, Redo2, Pencil, Highlighter, Eraser, Stamp, MousePointer,
@@ -95,6 +95,62 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
   };
 
   const editorContentRef = useRef<HTMLDivElement>(null);
+  const zoomScaleRef = useRef(zoomScale);
+  const zoomAnchorRef = useRef<{ x: number; y: number; vx: number; vy: number; oldScale: number } | null>(null);
+
+  // Sync zoomScale to ref for scroll listener stability
+  useEffect(() => {
+    zoomScaleRef.current = zoomScale;
+  }, [zoomScale]);
+
+  const handleZoomChange = (nextScale: number, e?: MouseEvent | WheelEvent) => {
+    if (!editorContentRef.current) return;
+    const element = editorContentRef.current;
+    const rect = element.getBoundingClientRect();
+
+    let vx = rect.width / 2;
+    let vy = rect.height / 2;
+
+    if (e) {
+      // Zoom focused on cursor if hovering a page wrapper, otherwise center of pages area
+      const pageWrapper = (e.target as HTMLElement).closest('.page-wrapper');
+      if (pageWrapper) {
+        vx = e.clientX - rect.left;
+        vy = e.clientY - rect.top;
+      }
+    }
+
+    const sx = element.scrollLeft;
+    const sy = element.scrollTop;
+    const cx = sx + vx;
+    const cy = sy + vy;
+
+    zoomAnchorRef.current = {
+      x: cx,
+      y: cy,
+      vx,
+      vy,
+      oldScale: zoomScaleRef.current,
+    };
+
+    setZoomScale(nextScale);
+  };
+
+  // Adjust scrolling post-render to lock the zoom anchor position in the viewport
+  useLayoutEffect(() => {
+    if (!zoomAnchorRef.current || !editorContentRef.current) return;
+    const anchor = zoomAnchorRef.current;
+    const element = editorContentRef.current;
+
+    const ratio = zoomScale / anchor.oldScale;
+    const nextScrollLeft = anchor.x * ratio - anchor.vx;
+    const nextScrollTop = anchor.y * ratio - anchor.vy;
+
+    element.scrollLeft = nextScrollLeft;
+    element.scrollTop = nextScrollTop;
+
+    zoomAnchorRef.current = null;
+  }, [zoomScale]);
 
   // Wheel and pinch-to-zoom listener with prevention of browser zoom
   useEffect(() => {
@@ -106,10 +162,8 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
         e.preventDefault();
         const direction = e.deltaY < 0 ? 1 : -1;
         const step = Math.min(0.08, Math.max(0.01, Math.abs(e.deltaY) * 0.003)) * direction;
-        setZoomScale((prev) => {
-          const next = Math.max(0.5, Math.min(2.5, prev + step));
-          return Math.round(next * 100) / 100;
-        });
+        const nextScale = Math.max(0.5, Math.min(2.5, zoomScaleRef.current + step));
+        handleZoomChange(Math.round(nextScale * 100) / 100, e);
       }
     };
 
@@ -314,7 +368,7 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
             <button
               className="btn-icon"
               title="Alejar (Zoom Out)"
-              onClick={() => setZoomScale((prev) => Math.max(0.5, prev - 0.1))}
+              onClick={() => handleZoomChange(Math.max(0.5, zoomScale - 0.1))}
               disabled={zoomScale <= 0.5}
               style={{ opacity: zoomScale <= 0.5 ? 0.35 : 1, cursor: zoomScale <= 0.5 ? 'not-allowed' : 'pointer' }}
             >
@@ -326,7 +380,7 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
             <button
               className="btn-icon"
               title="Acercar (Zoom In)"
-              onClick={() => setZoomScale((prev) => Math.min(2.5, prev + 0.1))}
+              onClick={() => handleZoomChange(Math.min(2.5, zoomScale + 0.1))}
               disabled={zoomScale >= 2.5}
               style={{ opacity: zoomScale >= 2.5 ? 0.35 : 1, cursor: zoomScale >= 2.5 ? 'not-allowed' : 'pointer' }}
             >
@@ -335,7 +389,7 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
             <button
               className="btn btn-secondary btn-small"
               title="Restablecer (100%)"
-              onClick={() => setZoomScale(1.0)}
+              onClick={() => handleZoomChange(1.0)}
               style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem', height: '22px', display: 'flex', alignItems: 'center' }}
             >
               100%

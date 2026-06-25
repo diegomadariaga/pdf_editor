@@ -57,19 +57,25 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
   const drawingCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [intrinsicSize, setIntrinsicSize] = useState<{ width: number; height: number } | null>(null);
+  const [debouncedScale, setDebouncedScale] = useState(renderScale);
 
-  // Drawing Local State
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [currentPoints, setCurrentPoints] = useState<{ x: number; y: number }[]>([]);
+  // Debounce the scale update to prevent heavy canvas re-rendering lag
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedScale(renderScale);
+    }, 200); // 200ms debounce
+    return () => clearTimeout(handler);
+  }, [renderScale]);
 
+  // Load intrinsic page dimensions at scale 1.0 (rotation-aware)
   useEffect(() => {
     let active = true;
-    const loadPageDimensions = async () => {
+    const loadIntrinsic = async () => {
       try {
         if (page.isBlank) {
-          // Standard A4 dimensions
           if (active) {
-            setDimensions({ width: 595.28 * renderScale, height: 841.89 * renderScale });
+            setIntrinsicSize({ width: 595.28, height: 841.89 });
           }
           return;
         }
@@ -91,7 +97,55 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
 
         const pdfjsPage = await pageDoc.getPage(idxOffset);
         const rotationAngle = (pdfjsPage.rotate + (page.rotation || 0)) % 360;
-        const viewport = pdfjsPage.getViewport({ scale: renderScale, rotation: rotationAngle });
+        const viewport = pdfjsPage.getViewport({ scale: 1.0, rotation: rotationAngle });
+        if (active) {
+          setIntrinsicSize({ width: viewport.width, height: viewport.height });
+        }
+      } catch (err) {
+        console.error("Error loading intrinsic dimensions:", err);
+      }
+    };
+    loadIntrinsic();
+    return () => {
+      active = false;
+    };
+  }, [page, pdfjsDoc]);
+
+  // Update canvas resolution (dimensions) using debouncedScale
+  useEffect(() => {
+    let active = true;
+    const loadPageDimensions = async () => {
+      try {
+        if (!intrinsicSize) return;
+
+        if (page.isBlank) {
+          if (active) {
+            setDimensions({
+              width: intrinsicSize.width * debouncedScale,
+              height: intrinsicSize.height * debouncedScale,
+            });
+          }
+          return;
+        }
+
+        let pageDoc = pdfjsDoc;
+        let idxOffset = page.originalIndex + 1;
+
+        if (page.externalBytes) {
+          const extPdf = await pdfjsLib.getDocument({
+            data: page.externalBytes,
+            cMapUrl: `${window.location.origin}/cmaps/`,
+            cMapPacked: true,
+            standardFontDataUrl: `${window.location.origin}/standard_fonts/`,
+            wasmUrl: `${window.location.origin}/wasm/`,
+          }).promise;
+          pageDoc = extPdf;
+          idxOffset = (page.externalOriginalIndex ?? 0) + 1;
+        }
+
+        const pdfjsPage = await pageDoc.getPage(idxOffset);
+        const rotationAngle = (pdfjsPage.rotate + (page.rotation || 0)) % 360;
+        const viewport = pdfjsPage.getViewport({ scale: debouncedScale, rotation: rotationAngle });
         if (active) {
           setDimensions({ width: viewport.width, height: viewport.height });
         }
@@ -103,8 +157,9 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
     return () => {
       active = false;
     };
-  }, [page, pdfjsDoc, renderScale]);
+  }, [intrinsicSize, page, pdfjsDoc, debouncedScale]);
 
+  // Render PDF page content using debouncedScale and dimensions
   useEffect(() => {
     if (!dimensions || !canvasRef.current) return;
     let active = true;
@@ -142,7 +197,7 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
         if (!active || !canvasRef.current) return;
 
         const rotationAngle = (pdfjsPage.rotate + (page.rotation || 0)) % 360;
-        const viewport = pdfjsPage.getViewport({ scale: renderScale, rotation: rotationAngle });
+        const viewport = pdfjsPage.getViewport({ scale: debouncedScale, rotation: rotationAngle });
 
         renderTask = pdfjsPage.render({
           canvasContext: context,
@@ -167,7 +222,11 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
         renderTask.cancel();
       }
     };
-  }, [dimensions, page, pdfjsDoc, renderScale]);
+  }, [dimensions, page, pdfjsDoc, debouncedScale]);
+
+  // Drawing Local State
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [currentPoints, setCurrentPoints] = useState<{ x: number; y: number }[]>([]);
 
   // Draw annotations (freehand pencil and highlighter lines) on top
   useEffect(() => {
@@ -361,10 +420,10 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
       className={`page-wrapper ${page.pageId === activePageId ? 'active-page-focus' : ''}`}
       onClick={() => onFocusPage(page.pageId)}
       style={
-        dimensions
+        intrinsicSize
           ? {
-              width: `${dimensions.width}px`,
-              height: `${dimensions.height}px`,
+              width: `${intrinsicSize.width * renderScale}px`,
+              height: `${intrinsicSize.height * renderScale}px`,
               position: 'relative',
             }
           : { minHeight: '600px', width: '100%', maxWidth: '800px', position: 'relative' }
