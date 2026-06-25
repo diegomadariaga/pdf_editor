@@ -364,9 +364,7 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
         dimensions
           ? {
               width: `${dimensions.width}px`,
-              aspectRatio: `${dimensions.width} / ${dimensions.height}`,
-              maxWidth: '100%',
-              height: 'auto',
+              height: `${dimensions.height}px`,
               position: 'relative',
             }
           : { minHeight: '600px', width: '100%', maxWidth: '800px', position: 'relative' }
