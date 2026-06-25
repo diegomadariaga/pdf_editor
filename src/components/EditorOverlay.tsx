@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, Type, LayoutGrid, TypeOutline, Palette, Check, Download, 
   Undo2, Redo2, Pencil, Highlighter, Eraser, Stamp, MousePointer,
-  CornerUpLeft, CornerUpRight
+  CornerUpLeft, CornerUpRight, ZoomIn, ZoomOut
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { Document, DrawingStroke, Watermark } from '../types';
 import { TextEditView } from './TextEditView';
 import { OrganizeView } from './OrganizeView';
+import { ThumbnailsSidebar } from './ThumbnailsSidebar';
 
 interface EditorOverlayProps {
   doc: Document;
@@ -69,7 +70,7 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
   canRedo,
 }) => {
   const activeBlock = doc.textBlocks.find((b) => b.id === activeTextBlockId);
-  const RENDER_SCALE = 1.5;
+  const [zoomScale, setZoomScale] = useState<number>(1.0);
 
   // Visual/Drawing Editor Tools Local UI State
   const [toolMode, setToolMode] = useState<'select' | 'text' | 'draw' | 'highlight' | 'erase'>('select');
@@ -84,6 +85,14 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
   const currentActivePageId = doc.pages.some((p) => p.pageId === activePageId)
     ? activePageId
     : (doc.pages[0]?.pageId || null);
+
+  const handleSelectPage = (pageId: string) => {
+    setActivePageId(pageId);
+    const element = document.getElementById(`page-wrapper-${pageId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   // Watermark Values derived directly from document
   const watermarkText = doc.watermark?.text || '';
@@ -275,6 +284,41 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
       {editorMode === 'text' && (
         <div className="sub-settings-bar" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
           
+          {/* Zoom Controls */}
+          <div className="zoom-controls" style={{ display: 'flex', gap: '6px', alignItems: 'center', background: 'var(--bg-darker)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
+            <button
+              className="btn-icon"
+              title="Alejar (Zoom Out)"
+              onClick={() => setZoomScale((prev) => Math.max(0.5, prev - 0.1))}
+              disabled={zoomScale <= 0.5}
+              style={{ opacity: zoomScale <= 0.5 ? 0.35 : 1, cursor: zoomScale <= 0.5 ? 'not-allowed' : 'pointer' }}
+            >
+              <ZoomOut size={14} />
+            </button>
+            <span style={{ fontSize: '0.75rem', minWidth: '40px', textAlign: 'center', fontWeight: 'bold' }}>
+              {Math.round(zoomScale * 100)}%
+            </span>
+            <button
+              className="btn-icon"
+              title="Acercar (Zoom In)"
+              onClick={() => setZoomScale((prev) => Math.min(2.5, prev + 0.1))}
+              disabled={zoomScale >= 2.5}
+              style={{ opacity: zoomScale >= 2.5 ? 0.35 : 1, cursor: zoomScale >= 2.5 ? 'not-allowed' : 'pointer' }}
+            >
+              <ZoomIn size={14} />
+            </button>
+            <button
+              className="btn btn-secondary btn-small"
+              title="Restablecer (100%)"
+              onClick={() => setZoomScale(1.0)}
+              style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem', height: '22px', display: 'flex', alignItems: 'center' }}
+            >
+              100%
+            </button>
+          </div>
+
+          <span className="style-divider" style={{ margin: '0 4px' }}></span>
+
           {/* Tool Mode Selection Group */}
           <div className="tool-control-segmented" style={{ display: 'flex', gap: '4px', background: 'var(--bg-darker)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
             <button
@@ -507,43 +551,53 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
       )}
 
       {/* Editor Workspace Areas */}
-      <div className="editor-content" onClick={handleEditorOverlayClick}>
-        {editorMode === 'text' ? (
-          <TextEditView
+      <div className="editor-body-container" style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {editorMode === 'text' && (
+          <ThumbnailsSidebar
             pages={doc.pages}
             pdfjsDoc={pdfjsDoc}
-            textBlocks={doc.textBlocks}
-            drawings={doc.drawings || []}
-            watermark={doc.watermark}
-            activeTextBlockId={activeTextBlockId}
-            renderScale={RENDER_SCALE}
-            onAddText={onAddTextBlock}
-            onSelectBlock={onSelectBlock}
-            onMoveBlock={onMoveBlock}
-            onDeleteBlock={onDeleteBlock}
-            onChangeTextBlockText={onChangeTextBlockText}
-            onDeselectBlocks={onDeselectBlocks}
-            // Add drawing/highlighter props:
-            toolMode={toolMode}
-            drawColor={toolMode === 'highlight' ? '#ffff00' : drawColor}
-            drawWidth={toolMode === 'highlight' && drawWidth < 10 ? 25 : drawWidth}
-            onAddDrawingStroke={onAddDrawingStroke}
-            onDeleteDrawingStroke={onDeleteDrawingStroke}
-            onDeletePage={onDeletePage}
             activePageId={currentActivePageId}
-            onFocusPage={setActivePageId}
-          />
-        ) : (
-          <OrganizeView
-            pages={doc.pages}
-            pdfjsDoc={pdfjsDoc}
-            onReorderPages={onReorderPages}
-            onDeletePage={onDeletePage}
-            onRotatePage={onRotatePage}
-            onInsertBlankPage={onInsertBlankPage}
-            onInsertPdfDrop={onInsertPdfDrop}
+            onSelectPage={handleSelectPage}
           />
         )}
+        <div className="editor-content" onClick={handleEditorOverlayClick}>
+          {editorMode === 'text' ? (
+            <TextEditView
+              pages={doc.pages}
+              pdfjsDoc={pdfjsDoc}
+              textBlocks={doc.textBlocks}
+              drawings={doc.drawings || []}
+              watermark={doc.watermark}
+              activeTextBlockId={activeTextBlockId}
+              renderScale={zoomScale}
+              onAddText={onAddTextBlock}
+              onSelectBlock={onSelectBlock}
+              onMoveBlock={onMoveBlock}
+              onDeleteBlock={onDeleteBlock}
+              onChangeTextBlockText={onChangeTextBlockText}
+              onDeselectBlocks={onDeselectBlocks}
+              // Add drawing/highlighter props:
+              toolMode={toolMode}
+              drawColor={toolMode === 'highlight' ? '#ffff00' : drawColor}
+              drawWidth={toolMode === 'highlight' && drawWidth < 10 ? 25 : drawWidth}
+              onAddDrawingStroke={onAddDrawingStroke}
+              onDeleteDrawingStroke={onDeleteDrawingStroke}
+              onDeletePage={onDeletePage}
+              activePageId={currentActivePageId}
+              onFocusPage={setActivePageId}
+            />
+          ) : (
+            <OrganizeView
+              pages={doc.pages}
+              pdfjsDoc={pdfjsDoc}
+              onReorderPages={onReorderPages}
+              onDeletePage={onDeletePage}
+              onRotatePage={onRotatePage}
+              onInsertBlankPage={onInsertBlankPage}
+              onInsertPdfDrop={onInsertPdfDrop}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

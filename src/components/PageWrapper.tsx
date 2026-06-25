@@ -357,6 +357,7 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
 
   return (
     <div
+      id={`page-wrapper-${page.pageId}`}
       className={`page-wrapper ${page.pageId === activePageId ? 'active-page-focus' : ''}`}
       onClick={() => onFocusPage(page.pageId)}
       style={
