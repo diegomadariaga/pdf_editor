@@ -15,7 +15,7 @@ interface OrganizeViewProps {
   onInsertPdfDrop: (afterIndex: number, file: File) => void;
 }
 
-export const OrganizeView: React.FC<OrganizeViewProps> = ({
+const OrganizeViewComponent: React.FC<OrganizeViewProps> = ({
   pages,
   pdfjsDoc,
   onReorderPages,
@@ -139,3 +139,5 @@ export const OrganizeView: React.FC<OrganizeViewProps> = ({
     </div>
   );
 };
+
+export const OrganizeView = React.memo(OrganizeViewComponent);

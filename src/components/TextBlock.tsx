@@ -11,7 +11,7 @@ interface TextBlockProps {
   onChangeText: (id: string, text: string) => void;
 }
 
-export const TextBlock: React.FC<TextBlockProps> = ({
+const TextBlockComponent: React.FC<TextBlockProps> = ({
   block,
   isActive,
   renderScale,
@@ -143,3 +143,5 @@ export const TextBlock: React.FC<TextBlockProps> = ({
     </div>
   );
 };
+
+export const TextBlock = React.memo(TextBlockComponent);

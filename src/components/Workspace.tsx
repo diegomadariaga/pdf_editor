@@ -18,7 +18,7 @@ interface WorkspaceProps {
   onDownload: (doc: Document) => void;
 }
 
-export const Workspace: React.FC<WorkspaceProps> = ({
+const WorkspaceComponent: React.FC<WorkspaceProps> = ({
   documents,
   onFilesSelect,
   onGenerateSample,
@@ -112,3 +112,5 @@ export const Workspace: React.FC<WorkspaceProps> = ({
     </main>
   );
 };
+
+export const Workspace = React.memo(WorkspaceComponent);

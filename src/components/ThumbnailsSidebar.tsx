@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { Page } from '../types';
+import { getCachedPdfjsDoc } from '../utils/pdfCache';
 
 interface ThumbnailsSidebarProps {
   pages: Page[];
@@ -9,7 +10,7 @@ interface ThumbnailsSidebarProps {
   onSelectPage: (pageId: string) => void;
 }
 
-export const ThumbnailsSidebar: React.FC<ThumbnailsSidebarProps> = ({
+const ThumbnailsSidebarComponent: React.FC<ThumbnailsSidebarProps> = ({
   pages,
   pdfjsDoc,
   activePageId,
@@ -36,6 +37,8 @@ export const ThumbnailsSidebar: React.FC<ThumbnailsSidebarProps> = ({
   );
 };
 
+export const ThumbnailsSidebar = React.memo(ThumbnailsSidebarComponent);
+
 interface ThumbnailItemProps {
   page: Page;
   index: number;
@@ -44,7 +47,7 @@ interface ThumbnailItemProps {
   onClick: () => void;
 }
 
-const ThumbnailItem: React.FC<ThumbnailItemProps> = ({
+const ThumbnailItemComponent: React.FC<ThumbnailItemProps> = ({
   page,
   index,
   pdfjsDoc,
@@ -63,6 +66,7 @@ const ThumbnailItem: React.FC<ThumbnailItemProps> = ({
 
   useEffect(() => {
     let active = true;
+    let renderTask: pdfjsLib.RenderTask | null = null;
     const renderThumb = async () => {
       try {
         if (!canvasRef.current || !active) return;
@@ -85,17 +89,13 @@ const ThumbnailItem: React.FC<ThumbnailItemProps> = ({
 
         let pdfPage;
         if (page.externalBytes) {
-          const extPdfDoc = await pdfjsLib.getDocument({
-            data: page.externalBytes,
-            cMapUrl: `${window.location.origin}/cmaps/`,
-            cMapPacked: true,
-            standardFontDataUrl: `${window.location.origin}/standard_fonts/`,
-            wasmUrl: `${window.location.origin}/wasm/`,
-          }).promise;
+          const extPdfDoc = await getCachedPdfjsDoc(page.externalBytes);
           pdfPage = await extPdfDoc.getPage((page.externalOriginalIndex ?? 0) + 1);
         } else {
           pdfPage = await pdfjsDoc.getPage(page.originalIndex + 1);
         }
+
+        if (!active || !canvasRef.current) return;
 
         const initialViewport = pdfPage.getViewport({ scale: 1.0 });
         const targetHeight = 110;
@@ -106,15 +106,22 @@ const ThumbnailItem: React.FC<ThumbnailItemProps> = ({
         canvas.width = viewport.width;
         canvas.height = viewport.height;
 
-        await pdfPage.render({ canvasContext: context, viewport, canvas }).promise;
+        renderTask = pdfPage.render({ canvasContext: context, viewport, canvas });
+        await renderTask.promise;
       } catch (err) {
-        console.error("Error rendering thumbnail sidebar item:", err);
+        const error = err as { name?: string };
+        if (error.name !== 'RenderingCancelledException') {
+          console.error("Error rendering thumbnail sidebar item:", err);
+        }
       }
     };
 
     renderThumb();
     return () => {
       active = false;
+      if (renderTask) {
+        renderTask.cancel();
+      }
     };
   }, [page, pdfjsDoc]);
 
@@ -131,3 +138,16 @@ const ThumbnailItem: React.FC<ThumbnailItemProps> = ({
     </div>
   );
 };
+
+const ThumbnailItem = React.memo(ThumbnailItemComponent, (prev, next) => {
+  return (
+    prev.index === next.index &&
+    prev.isActive === next.isActive &&
+    prev.pdfjsDoc === next.pdfjsDoc &&
+    prev.page.pageId === next.page.pageId &&
+    prev.page.rotation === next.page.rotation &&
+    prev.page.isBlank === next.page.isBlank &&
+    prev.page.externalOriginalIndex === next.page.externalOriginalIndex &&
+    prev.page.externalBytes === next.page.externalBytes
+  );
+});

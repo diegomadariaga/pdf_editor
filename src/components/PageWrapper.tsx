@@ -3,6 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { Page, TextBlock as TextBlockType, DrawingStroke, Watermark } from '../types';
 import { TextBlock } from './TextBlock';
+import { getCachedPdfjsDoc } from '../utils/pdfCache';
 
 interface PageWrapperProps {
   page: Page;
@@ -30,7 +31,7 @@ interface PageWrapperProps {
   onHoverCoords?: (coords: { x: number; y: number; width: number; height: number; pageIndex: number } | null) => void;
 }
 
-export const PageWrapper: React.FC<PageWrapperProps> = ({
+const PageWrapperComponent: React.FC<PageWrapperProps> = ({
   page,
   index,
   pdfjsDoc,
@@ -91,14 +92,7 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
         let idxOffset = page.originalIndex + 1;
 
         if (page.externalBytes) {
-          const extPdf = await pdfjsLib.getDocument({
-            data: page.externalBytes,
-            cMapUrl: `${window.location.origin}/cmaps/`,
-            cMapPacked: true,
-            standardFontDataUrl: `${window.location.origin}/standard_fonts/`,
-            wasmUrl: `${window.location.origin}/wasm/`,
-          }).promise;
-          pageDoc = extPdf;
+          pageDoc = await getCachedPdfjsDoc(page.externalBytes);
           idxOffset = (page.externalOriginalIndex ?? 0) + 1;
         }
 
@@ -153,14 +147,7 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
         let idxOffset = page.originalIndex + 1;
 
         if (page.externalBytes) {
-          const extPdf = await pdfjsLib.getDocument({
-            data: page.externalBytes,
-            cMapUrl: `${window.location.origin}/cmaps/`,
-            cMapPacked: true,
-            standardFontDataUrl: `${window.location.origin}/standard_fonts/`,
-            wasmUrl: `${window.location.origin}/wasm/`,
-          }).promise;
-          pageDoc = extPdf;
+          pageDoc = await getCachedPdfjsDoc(page.externalBytes);
           idxOffset = (page.externalOriginalIndex ?? 0) + 1;
         }
 
@@ -544,3 +531,65 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
     </div>
   );
 };
+
+export const PageWrapper = React.memo(PageWrapperComponent, (prev, next) => {
+  // 1. Basic prop checks
+  if (prev.index !== next.index) return false;
+  if (prev.pdfjsDoc !== next.pdfjsDoc) return false;
+  if (prev.renderScale !== next.renderScale) return false;
+  if (prev.toolMode !== next.toolMode) return false;
+  if (prev.drawColor !== next.drawColor) return false;
+  if (prev.drawWidth !== next.drawWidth) return false;
+
+  // 2. Page object checks
+  if (prev.page.pageId !== next.page.pageId) return false;
+  if (prev.page.rotation !== next.page.rotation) return false;
+  if (prev.page.isBlank !== next.page.isBlank) return false;
+  if (prev.page.externalOriginalIndex !== next.page.externalOriginalIndex) return false;
+  if (prev.page.externalBytes !== next.page.externalBytes) return false;
+
+  // 3. Active page focus check
+  const wasActive = prev.activePageId === prev.page.pageId;
+  const isActive = next.activePageId === next.page.pageId;
+  if (wasActive !== isActive) return false;
+
+  // 4. Watermark check
+  if (prev.watermark?.text !== next.watermark?.text) return false;
+  if (prev.watermark?.color !== next.watermark?.color) return false;
+  if (prev.watermark?.opacity !== next.watermark?.opacity) return false;
+  if (prev.watermark?.fontSize !== next.watermark?.fontSize) return false;
+
+  // 5. Active text block check (did the active text block change inside/outside this page?)
+  const prevHasActive = prev.textBlocks.some(b => b.id === prev.activeTextBlockId);
+  const nextHasActive = next.textBlocks.some(b => b.id === next.activeTextBlockId);
+  if (prevHasActive !== nextHasActive) return false;
+  if (prevHasActive && prev.activeTextBlockId !== next.activeTextBlockId) return false;
+
+  // 6. Text blocks checks (compare structural equivalence of items in array)
+  if (prev.textBlocks.length !== next.textBlocks.length) return false;
+  for (let i = 0; i < prev.textBlocks.length; i++) {
+    const pB = prev.textBlocks[i];
+    const nB = next.textBlocks[i];
+    if (pB.id !== nB.id) return false;
+    if (pB.text !== nB.text) return false;
+    if (pB.x !== nB.x) return false;
+    if (pB.y !== nB.y) return false;
+    if (pB.font !== nB.font) return false;
+    if (pB.fontSize !== nB.fontSize) return false;
+    if (pB.color !== nB.color) return false;
+  }
+
+  // 7. Drawings checks
+  if (prev.drawings.length !== next.drawings.length) return false;
+  for (let i = 0; i < prev.drawings.length; i++) {
+    const pD = prev.drawings[i];
+    const nD = next.drawings[i];
+    if (pD.id !== nD.id) return false;
+    if (pD.type !== nD.type) return false;
+    if (pD.color !== nD.color) return false;
+    if (pD.width !== nD.width) return false;
+    if (pD.points.length !== nD.points.length) return false;
+  }
+
+  return true;
+});

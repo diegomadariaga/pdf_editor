@@ -53,6 +53,17 @@ const generateUniqueId = (prefix: string) => {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1000000).toString(36)}`;
 };
 
+const cloneDocument = (doc: Document): Document => {
+  return {
+    ...doc,
+    pages: doc.pages.map((p) => ({ ...p })),
+    textBlocks: doc.textBlocks.map((tb) => ({ ...tb })),
+    loadedTextBlocks: doc.loadedTextBlocks.map((tb) => ({ ...tb })),
+    drawings: doc.drawings ? doc.drawings.map((d) => ({ ...d, points: d.points.map((pt) => ({ ...pt })) })) : undefined,
+    watermark: doc.watermark ? { ...doc.watermark } : undefined,
+  };
+};
+
 export const App: React.FC = () => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [editorMode, setEditorMode] = useState<'text' | 'organize'>('text');
@@ -103,14 +114,14 @@ export const App: React.FC = () => {
       historyDebounceRef.current = setTimeout(() => {
         setHistory((prev) => {
           const nextHist = prev.slice(0, historyIndex + 1);
-          return [...nextHist, JSON.parse(JSON.stringify(newDoc))];
+          return [...nextHist, cloneDocument(newDoc)];
         });
         setHistoryIndex((prev) => prev + 1);
       }, 300);
     } else {
       setHistory((prev) => {
         const nextHist = prev.slice(0, historyIndex + 1);
-        return [...nextHist, JSON.parse(JSON.stringify(newDoc))];
+        return [...nextHist, cloneDocument(newDoc)];
       });
       setHistoryIndex((prev) => prev + 1);
     }
@@ -120,7 +131,7 @@ export const App: React.FC = () => {
     if (historyIndex > 0) {
       const newIdx = historyIndex - 1;
       setHistoryIndex(newIdx);
-      setEditingDoc(JSON.parse(JSON.stringify(history[newIdx])));
+      setEditingDoc(cloneDocument(history[newIdx]));
       showToast("Deshacer aplicado.", "info");
     }
   };
@@ -129,7 +140,7 @@ export const App: React.FC = () => {
     if (historyIndex < history.length - 1) {
       const newIdx = historyIndex + 1;
       setHistoryIndex(newIdx);
-      setEditingDoc(JSON.parse(JSON.stringify(history[newIdx])));
+      setEditingDoc(cloneDocument(history[newIdx]));
       showToast("Rehacer aplicado.", "info");
     }
   };
@@ -452,20 +463,11 @@ export const App: React.FC = () => {
     setEditorMode('text');
     setActiveTextBlockId(null);
 
-    // Deep clone doc values for temporary editing
-    const tempEditingDoc: Document = {
-      id: doc.id,
-      name: doc.name,
-      pages: JSON.parse(JSON.stringify(doc.pages)),
-      textBlocks: JSON.parse(JSON.stringify(doc.textBlocks)),
-      loadedTextBlocks: JSON.parse(JSON.stringify(doc.loadedTextBlocks)),
-      rawBytes: doc.rawBytes,
-      drawings: JSON.parse(JSON.stringify(doc.drawings || [])),
-      watermark: doc.watermark ? { ...doc.watermark } : undefined,
-    };
+    // Structural clone doc values for temporary editing
+    const tempEditingDoc = cloneDocument(doc);
     
     setEditingDoc(tempEditingDoc);
-    setHistory([JSON.parse(JSON.stringify(tempEditingDoc))]);
+    setHistory([cloneDocument(tempEditingDoc)]);
     setHistoryIndex(0);
 
     showLoader("Cargando Editor", "Cargando páginas del PDF y preparando espacio de trabajo...");
@@ -955,8 +957,8 @@ export const App: React.FC = () => {
             rawBytes: newBytes,
             pages: savedPages,
             textBlocks: savedBlocks,
-            loadedTextBlocks: JSON.parse(JSON.stringify(savedBlocks)),
-            drawings: JSON.parse(JSON.stringify(editingDoc.drawings || [])),
+            loadedTextBlocks: savedBlocks.map((tb) => ({ ...tb })),
+            drawings: editingDoc.drawings ? editingDoc.drawings.map((d) => ({ ...d, points: d.points.map((pt) => ({ ...pt })) })) : undefined,
             watermark: editingDoc.watermark ? { ...editingDoc.watermark } : undefined,
           };
         })

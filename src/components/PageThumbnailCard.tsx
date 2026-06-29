@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { CornerUpRight, CornerUpLeft, Trash2, FileUp } from 'lucide-react';
 import type { Page } from '../types';
+import { getCachedPdfjsDoc } from '../utils/pdfCache';
 
 interface PageThumbnailCardProps {
   page: Page;
@@ -12,7 +13,7 @@ interface PageThumbnailCardProps {
   onInsertPdfDrop?: (afterIndex: number, file: File) => void;
 }
 
-export const PageThumbnailCard: React.FC<PageThumbnailCardProps> = ({
+const PageThumbnailCardComponent: React.FC<PageThumbnailCardProps> = ({
   page,
   index,
   pdfjsDoc,
@@ -25,6 +26,7 @@ export const PageThumbnailCard: React.FC<PageThumbnailCardProps> = ({
 
   useEffect(() => {
     let active = true;
+    let renderTask: pdfjsLib.RenderTask | null = null;
     const renderPageThumb = async () => {
       try {
         if (!canvasRef.current || !active) return;
@@ -48,18 +50,14 @@ export const PageThumbnailCard: React.FC<PageThumbnailCardProps> = ({
 
         let pdfPage;
         if (page.externalBytes) {
-          const extPdfDoc = await pdfjsLib.getDocument({
-            data: page.externalBytes,
-            cMapUrl: `${window.location.origin}/cmaps/`,
-            cMapPacked: true,
-            standardFontDataUrl: `${window.location.origin}/standard_fonts/`,
-            wasmUrl: `${window.location.origin}/wasm/`,
-          }).promise;
+          const extPdfDoc = await getCachedPdfjsDoc(page.externalBytes);
           pdfPage = await extPdfDoc.getPage((page.externalOriginalIndex ?? 0) + 1);
         } else {
           pdfPage = await pdfjsDoc.getPage(page.originalIndex + 1);
         }
         
+        if (!active || !canvasRef.current) return;
+
         const initialViewport = pdfPage.getViewport({ scale: 1.0 });
         const scale = 150 / initialViewport.height;
         const rotationAngle = (pdfPage.rotate + (page.rotation || 0)) % 360;
@@ -68,9 +66,13 @@ export const PageThumbnailCard: React.FC<PageThumbnailCardProps> = ({
         canvas.width = viewport.width;
         canvas.height = viewport.height;
 
-        await pdfPage.render({ canvasContext: context, viewport, canvas }).promise;
+        renderTask = pdfPage.render({ canvasContext: context, viewport, canvas });
+        await renderTask.promise;
       } catch (err) {
-        console.error("Error rendering page thumbnail in organizer:", err);
+        const error = err as { name?: string };
+        if (error.name !== 'RenderingCancelledException') {
+          console.error("Error rendering page thumbnail in organizer:", err);
+        }
       }
     };
 
@@ -78,6 +80,9 @@ export const PageThumbnailCard: React.FC<PageThumbnailCardProps> = ({
 
     return () => {
       active = false;
+      if (renderTask) {
+        renderTask.cancel();
+      }
     };
   }, [page, pdfjsDoc]);
 
@@ -153,3 +158,15 @@ export const PageThumbnailCard: React.FC<PageThumbnailCardProps> = ({
     </div>
   );
 };
+
+export const PageThumbnailCard = React.memo(PageThumbnailCardComponent, (prev, next) => {
+  return (
+    prev.index === next.index &&
+    prev.pdfjsDoc === next.pdfjsDoc &&
+    prev.page.pageId === next.page.pageId &&
+    prev.page.rotation === next.page.rotation &&
+    prev.page.isBlank === next.page.isBlank &&
+    prev.page.externalOriginalIndex === next.page.externalOriginalIndex &&
+    prev.page.externalBytes === next.page.externalBytes
+  );
+});

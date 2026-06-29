@@ -28,7 +28,7 @@ interface TextEditViewProps {
   onHoverCoords?: (coords: { x: number; y: number; width: number; height: number; pageIndex: number } | null) => void;
 }
 
-export const TextEditView: React.FC<TextEditViewProps> = ({
+const TextEditViewComponent: React.FC<TextEditViewProps> = ({
   pages,
   pdfjsDoc,
   textBlocks,
@@ -92,3 +92,5 @@ export const TextEditView: React.FC<TextEditViewProps> = ({
     </div>
   );
 };
+
+export const TextEditView = React.memo(TextEditViewComponent);
