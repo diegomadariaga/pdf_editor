@@ -86,8 +86,22 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
     ? activePageId
     : (doc.pages[0]?.pageId || null);
 
+  // Track if scrolling is caused programmatically (via clicking a thumbnail)
+  const isProgrammaticScrollRef = useRef<boolean>(false);
+  const programmaticScrollTimeoutRef = useRef<number | null>(null);
+
   const handleSelectPage = (pageId: string) => {
     setActivePageId(pageId);
+    
+    // Disable scroll spy during smooth programmatic scroll to target page
+    isProgrammaticScrollRef.current = true;
+    if (programmaticScrollTimeoutRef.current) {
+      window.clearTimeout(programmaticScrollTimeoutRef.current);
+    }
+    programmaticScrollTimeoutRef.current = window.setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+    }, 800);
+
     const element = document.getElementById(`page-wrapper-${pageId}`);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -95,6 +109,67 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
   };
 
   const editorContentRef = useRef<HTMLDivElement>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (programmaticScrollTimeoutRef.current) {
+        window.clearTimeout(programmaticScrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Scroll spy effect: detect currently viewed page based on scroll position (50% visibility threshold)
+  useEffect(() => {
+    const container = editorContentRef.current;
+    if (!container || editorMode !== 'text') return;
+
+    const handleScroll = () => {
+      if (isProgrammaticScrollRef.current) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const containerHeight = containerRect.height;
+      
+      // The threshold line is at 50% height of the container's viewport
+      const thresholdLine = containerRect.top + containerHeight * 0.5;
+
+      let activePageIdCandidate: string | null = null;
+      let minDistance = Infinity;
+
+      for (const page of doc.pages) {
+        const element = document.getElementById(`page-wrapper-${page.pageId}`);
+        if (!element) continue;
+
+        const rect = element.getBoundingClientRect();
+        
+        // If the page overlaps the threshold line (currently at 50% of the screen height)
+        if (rect.top <= thresholdLine && rect.bottom >= thresholdLine) {
+          activePageIdCandidate = page.pageId;
+          break;
+        }
+
+        // Otherwise find the page whose center is closest to the middle of the viewport
+        const pageMiddle = rect.top + rect.height / 2;
+        const distance = Math.abs(pageMiddle - thresholdLine);
+        if (distance < minDistance) {
+          minDistance = distance;
+          activePageIdCandidate = page.pageId;
+        }
+      }
+
+      if (activePageIdCandidate && activePageIdCandidate !== currentActivePageId) {
+        setActivePageId(activePageIdCandidate);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    // Run once on mount or when relevant parameters change
+    handleScroll();
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, [doc.pages, currentActivePageId, editorMode, zoomScale]);
   const zoomScaleRef = useRef(zoomScale);
   const zoomAnchorRef = useRef<{ x: number; y: number; vx: number; vy: number; oldScale: number } | null>(null);
 

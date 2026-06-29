@@ -52,6 +52,14 @@ const ThumbnailItem: React.FC<ThumbnailItemProps> = ({
   onClick,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll this thumbnail into view when it becomes active
+  useEffect(() => {
+    if (isActive && containerRef.current) {
+      containerRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [isActive]);
 
   useEffect(() => {
     let active = true;
@@ -112,6 +120,7 @@ const ThumbnailItem: React.FC<ThumbnailItemProps> = ({
 
   return (
     <div
+      ref={containerRef}
       className={`sidebar-thumb-item ${isActive ? 'active' : ''}`}
       onClick={onClick}
     >
