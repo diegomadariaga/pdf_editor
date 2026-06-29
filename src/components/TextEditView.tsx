@@ -25,6 +25,7 @@ interface TextEditViewProps {
   onDeletePage: (pageId: string) => void;
   activePageId: string | null;
   onFocusPage: (pageId: string) => void;
+  onHoverCoords?: (coords: { x: number; y: number; width: number; height: number; pageIndex: number } | null) => void;
 }
 
 export const TextEditView: React.FC<TextEditViewProps> = ({
@@ -49,6 +50,7 @@ export const TextEditView: React.FC<TextEditViewProps> = ({
   onDeletePage,
   activePageId,
   onFocusPage,
+  onHoverCoords,
 }) => {
   return (
     <div id="pages-container" className="pages-container text-mode-view">
@@ -83,6 +85,7 @@ export const TextEditView: React.FC<TextEditViewProps> = ({
             onDeletePage={onDeletePage}
             activePageId={activePageId}
             onFocusPage={onFocusPage}
+            onHoverCoords={onHoverCoords}
           />
         );
       })}

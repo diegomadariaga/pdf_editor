@@ -27,6 +27,7 @@ interface PageWrapperProps {
   onDeletePage: (pageId: string) => void;
   activePageId: string | null;
   onFocusPage: (pageId: string) => void;
+  onHoverCoords?: (coords: { x: number; y: number; width: number; height: number; pageIndex: number } | null) => void;
 }
 
 export const PageWrapper: React.FC<PageWrapperProps> = ({
@@ -52,6 +53,7 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
   onDeletePage,
   activePageId,
   onFocusPage,
+  onHoverCoords,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -383,11 +385,36 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
     }
   };
 
+  const pageTypeLabel = page.isBlank ? 'EN BLANCO' : page.externalBytes ? 'IMPORTADO' : 'ORIGINAL';
+  const sizeLabel = intrinsicSize ? `${Math.round(intrinsicSize.width)} × ${Math.round(intrinsicSize.height)} pt` : '';
+  const rotationLabel = page.rotation && page.rotation !== 0 ? ` [ROT: ${page.rotation}°]` : '';
+
   return (
     <div
       id={`page-wrapper-${page.pageId}`}
       className={`page-wrapper ${page.pageId === activePageId ? 'active-page-focus' : ''}`}
       onClick={() => onFocusPage(page.pageId)}
+      onMouseMove={(e) => {
+        if (onHoverCoords && intrinsicSize) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const clickY = e.clientY - rect.top;
+          const xPercent = (clickX / rect.width) * 100;
+          const yPercent = (clickY / rect.height) * 100;
+          onHoverCoords({
+            x: xPercent,
+            y: yPercent,
+            width: Math.round(intrinsicSize.width),
+            height: Math.round(intrinsicSize.height),
+            pageIndex: index,
+          });
+        }
+      }}
+      onMouseLeave={() => {
+        if (onHoverCoords) {
+          onHoverCoords(null);
+        }
+      }}
       style={
         intrinsicSize
           ? {
@@ -399,28 +426,18 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
       }
     >
       {/* Floating page-level controls (always visible) */}
-      <div
-        className="page-wrapper-floating-bar"
-        style={{
-          position: 'absolute',
-          top: '12px',
-          left: '12px',
-          zIndex: 10,
-          background: 'rgba(15, 21, 36, 0.85)',
-          backdropFilter: 'blur(8px)',
-          borderRadius: '8px',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          padding: '4px 8px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-        }}
-      >
-        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-          Pág. {index + 1}
+      <div className="page-wrapper-floating-bar">
+        <span className="page-num-indicator">
+          PÁG. {index + 1}
         </span>
         
-        <span style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.1)' }}></span>
+        <span className="bar-separator"></span>
+        
+        <span className="page-size-indicator">
+          {pageTypeLabel} ({sizeLabel}){rotationLabel}
+        </span>
+        
+        <span className="bar-separator"></span>
         
         {toolMode === 'text' && (
           <>
@@ -432,7 +449,7 @@ export const PageWrapper: React.FC<PageWrapperProps> = ({
             >
               <Plus size={10} style={{ marginRight: '2px' }} /> + Texto
             </button>
-            <span style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.1)' }}></span>
+            <span className="bar-separator"></span>
           </>
         )}
 

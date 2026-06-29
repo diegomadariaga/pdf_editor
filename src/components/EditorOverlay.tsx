@@ -71,6 +71,7 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
 }) => {
   const activeBlock = doc.textBlocks.find((b) => b.id === activeTextBlockId);
   const [zoomScale, setZoomScale] = useState<number>(1.0);
+  const [hoverCoords, setHoverCoords] = useState<{ x: number; y: number; width: number; height: number; pageIndex: number } | null>(null);
 
   // Visual/Drawing Editor Tools Local UI State
   const [toolMode, setToolMode] = useState<'select' | 'text' | 'draw' | 'highlight' | 'erase'>('select');
@@ -739,6 +740,7 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
               onDeletePage={onDeletePage}
               activePageId={currentActivePageId}
               onFocusPage={setActivePageId}
+              onHoverCoords={setHoverCoords}
             />
           ) : (
             <OrganizeView
@@ -752,6 +754,28 @@ export const EditorOverlay: React.FC<EditorOverlayProps> = ({
             />
           )}
         </div>
+        {/* Floating Technical Coordinate HUD */}
+        {editorMode === 'text' && (
+          <div className="coordinate-hud">
+            <div className="hud-indicator">
+              <span className="hud-label">MESA DE DIBUJO</span>
+              <span className="hud-separator">::</span>
+              {hoverCoords ? (
+                <>
+                  <span className="hud-value">PÁG. {hoverCoords.pageIndex + 1}</span>
+                  <span className="hud-separator">|</span>
+                  <span className="hud-value">X: {hoverCoords.x.toFixed(1)}%</span>
+                  <span className="hud-separator">|</span>
+                  <span className="hud-value">Y: {hoverCoords.y.toFixed(1)}%</span>
+                  <span className="hud-separator">|</span>
+                  <span className="hud-value">{hoverCoords.width} × {hoverCoords.height} pt</span>
+                </>
+              ) : (
+                <span className="hud-value text-dim font-mono">PUNTERO FUERA DE PÁGINA</span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
