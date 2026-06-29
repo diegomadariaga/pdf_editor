@@ -22,6 +22,15 @@ export const TextBlock: React.FC<TextBlockProps> = ({
 }) => {
   const blockRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLSpanElement>(null);
+  const textRef = useRef(block.text);
+
+  // Sync DOM text if it changes from outside (e.g. undo/redo or initial load)
+  useEffect(() => {
+    if (contentRef.current && contentRef.current.textContent !== block.text) {
+      contentRef.current.textContent = block.text;
+      textRef.current = block.text;
+    }
+  }, [block.text]);
 
   useEffect(() => {
     if (isActive && block.text === '' && contentRef.current) {
@@ -31,7 +40,7 @@ export const TextBlock: React.FC<TextBlockProps> = ({
         }
       }, 50);
     }
-  }, [isActive, block.text]);
+  }, [isActive]);
 
   const getCssFontFamily = (font: string) => {
     if (font === 'TimesNewRoman') return '"Times New Roman", Times, serif';
@@ -98,7 +107,9 @@ export const TextBlock: React.FC<TextBlockProps> = ({
   };
 
   const handleInput = (e: React.FormEvent<HTMLSpanElement>) => {
-    onChangeText(block.id, e.currentTarget.textContent || '');
+    const newText = e.currentTarget.textContent || '';
+    textRef.current = newText;
+    onChangeText(block.id, newText);
   };
 
   return (
@@ -121,9 +132,7 @@ export const TextBlock: React.FC<TextBlockProps> = ({
         suppressContentEditableWarning
         spellCheck={false}
         onInput={handleInput}
-      >
-        {block.text}
-      </span>
+      />
       <button
         className="text-block-delete"
         title="Eliminar bloque"
